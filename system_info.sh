@@ -8,8 +8,8 @@
 
 # ---------- تنظیمات آپدیت (این بخش را ویرایش کنید) ----------
 CURRENT_VERSION="1.0"   # نسخه فعلی اسکریپت
-REPO_OWNER="arex341sz-max"   # نام کاربری گیت‌هاب خود را وارد کنید
-REPO_NAME="linuxinfoupdate"          # نام مخزن گیت‌هاب خود را وارد کنید
+REPO_OWNER="YOUR_GITHUB_USERNAME"   # نام کاربری گیت‌هاب خود را وارد کنید
+REPO_NAME="YOUR_REPO_NAME"          # نام مخزن گیت‌هاب خود را وارد کنید
 REPO_BRANCH="main"                  # برنچ مخزن (معمولاً main یا master)
 # آدرس کامل فایل‌ها در گیت‌هاب (RAW)
 REPO_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
@@ -27,6 +27,10 @@ NC='\033[0m' # بدون رنگ
 
 # ---------- تابع بررسی و انجام آپدیت ----------
 check_for_updates() {
+    # دریافت مسیر مطلق اسکریپت فعلی (قبل از هر گونه cd)
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+    
     # دریافت فایل version.txt از سرور
     echo -e "${BLUE}➜ در حال بررسی آپدیت...${NC}"
     VERSION_FILE=$(curl -s --max-time 5 "${REPO_RAW_URL}/version.txt" 2>/dev/null)
@@ -49,16 +53,16 @@ check_for_updates() {
         return 0
     fi
 
-    echo -e "${BLUE}➜ نسخه محلی: ${BOLD}$CURRENT_VERSION${NC}  |  نسخه راه دور: ${BOLD}$REMOTE_VERSION${NC}"
-
     # مقایسه نسخه‌ها (اگر متفاوت بود)
     if [ "$REMOTE_VERSION" != "$CURRENT_VERSION" ]; then
-        echo -e "${YELLOW}⚠ نسخه جدیدی پیدا شد! در حال دریافت آپدیت...${NC}"
+        # ✅ نمایش تیک سبز و نسخه‌ی جدید
+        echo -e "${GREEN}✓ اپدیت ${REMOTE_VERSION}${NC}"
+        echo -e "${YELLOW}⚠ در حال دریافت آپدیت...${NC}"
         
         # اگر لیست فایل‌ها خالی بود، از لیست پیش‌فرض استفاده کن (فقط خود اسکریپت)
         if [ -z "$FILE_LIST" ]; then
             echo -e "${YELLOW}⚠ لیست فایل‌ها در version.txt خالی است. فقط فایل اصلی آپدیت می‌شود.${NC}"
-            FILE_LIST="system_info.sh"
+            FILE_LIST="$SCRIPT_NAME"
         fi
         
         # ایجاد یک پوشه موقت برای دانلود
@@ -94,22 +98,24 @@ check_for_updates() {
                     continue
                 fi
                 
-                # گرفتن مسیر کامل اسکریپت جاری
-                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-                # ساخت مسیر کامل فایل مقصد
+                # ساخت مسیر کامل فایل مقصد با استفاده از SCRIPT_DIR ذخیره‌شده
                 TARGET_FILE="${SCRIPT_DIR}/${FILE}"
                 
                 # ایجاد پوشه‌های مورد نیاز در مسیر مقصد
                 TARGET_DIR=$(dirname "$TARGET_FILE")
                 mkdir -p "$TARGET_DIR"
                 
-                # کپی فایل جدید به جای فایل قدیمی
-                cp -f "$FILE" "$TARGET_FILE"
-                # مجوز اجرا بده (فقط برای فایل‌هایی که پسوند .sh یا .py دارند)
-                if [[ "$FILE" == *.sh ]] || [[ "$FILE" == *.py ]]; then
-                    chmod +x "$TARGET_FILE" 2>/dev/null
+                # اگر فایل مقصد با فایل مبدا یکی نباشد، کپی کن
+                if [ "$(realpath "$FILE" 2>/dev/null)" != "$(realpath "$TARGET_FILE" 2>/dev/null)" ]; then
+                    cp -f "$FILE" "$TARGET_FILE"
+                    # مجوز اجرا بده (فقط برای فایل‌هایی که پسوند .sh یا .py دارند)
+                    if [[ "$FILE" == *.sh ]] || [[ "$FILE" == *.py ]]; then
+                        chmod +x "$TARGET_FILE" 2>/dev/null
+                    fi
+                    echo -e "${GREEN}✓ فایل ${FILE} با موفقیت آپدیت شد.${NC}"
+                else
+                    echo -e "${YELLOW}⚠ فایل ${FILE} یکسان است، نیازی به کپی نیست.${NC}"
                 fi
-                echo -e "${GREEN}✓ فایل ${FILE} با موفقیت آپدیت شد.${NC}"
             done
             
             # پاک کردن پوشه موقت
@@ -118,8 +124,8 @@ check_for_updates() {
             echo -e "${GREEN}✓ آپدیت کامل شد. در حال راه‌اندازی مجدد اسکریپت جدید...${NC}"
             echo -e "═══════════════════════════════════════════════════════\n"
             
-            # اجرای اسکریپت جدید با همان آرگومان‌ها و خروج از اسکریپت فعلی
-            exec "$0" "$@"
+            # اجرای اسکریپت جدید با مسیر کامل و خروج از اسکریپت فعلی
+            exec "${SCRIPT_DIR}/${SCRIPT_NAME}" "$@"
             # (بعد از exec، کدهای پایین دیگر اجرا نمی‌شوند)
         else
             # اگر دانلود ناموفق بود، به پوشه قبلی برگرد و ادامه بده
@@ -128,7 +134,8 @@ check_for_updates() {
             echo -e "${RED}✗ آپدیت ناموفق بود. ادامه با نسخه فعلی...${NC}"
         fi
     else
-        echo -e "${GREEN}✓ اسکریپت شما به‌روز است.${NC}"
+        # ✅ نمایش تیک سبز و پیام به‌روز بودن
+        echo -e "${GREEN}✓ اسکریپت شما به‌روز است. (نسخه ${CURRENT_VERSION})${NC}"
     fi
 }
 
