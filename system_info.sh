@@ -1,8 +1,8 @@
 #!/bin/bash
 
 CURRENT_VERSION="1.0"
-REPO_OWNER="sazidehm"
-REPO_NAME="linuxsupd"
+REPO_OWNER="arex341sz-max"
+REPO_NAME="linuxinfoupdate"
 REPO_BRANCH="main"
 REPO_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
 
