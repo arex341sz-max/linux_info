@@ -1,22 +1,11 @@
 #!/bin/bash
 
-# ============================================================
-# نام: system_info.sh
-# کاربرد: نمایش اطلاعات سیستم در ۴ سطح امنیتی-سیستمی
-# نسخه: 1.0
-# ============================================================
-
-# ---------- تنظیمات آپدیت (این بخش را ویرایش کنید) ----------
-CURRENT_VERSION="1.0"   # نسخه فعلی اسکریپت
-REPO_OWNER="sazidehm"   # نام کاربری گیت‌هاب خود را وارد کنید
-REPO_NAME="linuxsupd"   # نام مخزن گیت‌هاب خود را وارد کنید
-REPO_BRANCH="main"      # برنچ مخزن (معمولاً main یا master)
-# آدرس کامل فایل‌ها در گیت‌هاب (RAW)
+CURRENT_VERSION="1.0"
+REPO_OWNER="sazidehm"
+REPO_NAME="linuxsupd"
+REPO_BRANCH="main"
 REPO_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
 
-# ---------- پایان تنظیمات آپدیت ----------
-
-# ---------- رنگ‌ها ----------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -25,75 +14,40 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# ---------- تابع بررسی و انجام آپدیت با پاکسازی کامل ----------
 check_for_updates() {
-    # دریافت مسیر مطلق اسکریپت فعلی
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
     
-    # دریافت فایل version.txt از سرور
-    echo -e "${BLUE}➜ در حال بررسی آپدیت...${NC}"
-    VERSION_FILE=$(curl -s --max-time 5 "${REPO_RAW_URL}/version.txt" 2>/dev/null)
-    
-    if [ -z "$VERSION_FILE" ]; then
-        echo -e "${YELLOW}⚠ عدم دسترسی به سرور برای بررسی آپدیت.${NC}"
-        return 0
-    fi
+    VERSION_FILE=$(curl -s --max-time 3 "${REPO_RAW_URL}/version.txt" 2>/dev/null)
+    [ -z "$VERSION_FILE" ] && return 0
 
-    # استخراج نسخه
     REMOTE_VERSION=$(echo "$VERSION_FILE" | grep -E "^v=" | head -1 | cut -d'=' -f2 | tr -d ' \t\n\r')
-    
-    # استخراج لیست فایل‌ها
+    [ -z "$REMOTE_VERSION" ] && return 0
+
     FILE_LIST=$(echo "$VERSION_FILE" | grep -A100 "^listf=" | sed -n '/^listf="/,/^"/p' | grep -v "^listf=" | grep -v '^"$' | sed 's/^[ \t]*//' | sed '/^[[:space:]]*$/d')
 
-    if [ -z "$REMOTE_VERSION" ]; then
-        echo -e "${YELLOW}⚠ فایل version.txt معتبر نیست (نسخه پیدا نشد).${NC}"
-        return 0
-    fi
-
-    # مقایسه نسخه‌ها
     if [ "$REMOTE_VERSION" != "$CURRENT_VERSION" ]; then
-        echo -e "${GREEN}✓ اپدیت ${REMOTE_VERSION}${NC}"
-        echo -e "${YELLOW}⚠ در حال دریافت آپدیت...${NC}"
-        
-        if [ -z "$FILE_LIST" ]; then
-            echo -e "${YELLOW}⚠ لیست فایل‌ها خالی است. فقط فایل اصلی آپدیت می‌شود.${NC}"
-            FILE_LIST="$SCRIPT_NAME"
-        fi
-        
-        # بررسی وجود main.py در لیست فایل‌ها
         HAS_MAIN_PY=false
         echo "$FILE_LIST" | grep -q "main.py" && HAS_MAIN_PY=true
-        
-        # پوشه موقت برای دانلود
+
         TEMP_DIR=$(mktemp -d)
-        cd "$TEMP_DIR" || exit 1
-        
+        cd "$TEMP_DIR" || return 0
+
         UPDATE_SUCCESS=true
-        
-        # دانلود فایل‌ها
+
         for FILE in $FILE_LIST; do
             FILE=$(echo "$FILE" | xargs)
             [ -z "$FILE" ] && continue
-            
-            echo -e "${BLUE}➜ دانلود ${FILE} ...${NC}"
-            curl -s -f --create-dirs -O "${REPO_RAW_URL}/${FILE}"
+            curl -s -f --create-dirs -O "${REPO_RAW_URL}/${FILE}" 2>/dev/null
             if [ $? -ne 0 ] || [ ! -f "$FILE" ]; then
-                echo -e "${RED}✗ خطا در دانلود فایل ${FILE}!${NC}"
                 UPDATE_SUCCESS=false
                 break
             fi
         done
-        
+
         if [ "$UPDATE_SUCCESS" = true ]; then
-            # ====================================================
-            # ساخت اسکریپت به‌روزرسانی (Updater) برای پاکسازی کامل
-            # ====================================================
             cat > "${TEMP_DIR}/updater.sh" << 'EOF'
 #!/bin/bash
-# این اسکریپت توسط system_info.sh ساخته شده است
-# وظیفه: پاکسازی کامل دایرکتوری و نصب فایل‌های جدید
-
 TARGET_DIR="$1"
 SOURCE_DIR="$2"
 SCRIPT_NAME="$3"
@@ -101,68 +55,46 @@ HAS_MAIN_PY="$4"
 shift 4
 ARGS="$@"
 
-# حذف همه فایل‌ها و پوشه‌های قدیمی (به جز خود پوشه)
-echo "🧹 در حال پاکسازی کامل دایرکتوری: $TARGET_DIR"
 cd "$TARGET_DIR" || exit 1
 
-# حذف همه چیز به جز پوشه‌های مخفی (مثل .git) اگر وجود دارند
-# اما برای امنیت، همه چیز را حذف می‌کنیم
+# پاکسازی کامل (بی‌صدا)
 rm -rf ./* 2>/dev/null
-rm -rf .[!.]* 2>/dev/null   # حذف فایل‌های مخفی (به جز . و ..)
+rm -rf .[!.]* 2>/dev/null
 
-# کپی فایل‌های جدید از پوشه موقت
-echo "📦 در حال کپی فایل‌های جدید..."
+# کپی فایل‌های جدید
 cp -rf "$SOURCE_DIR"/* "$TARGET_DIR/" 2>/dev/null
-cp -rf "$SOURCE_DIR"/.[!.]* "$TARGET_DIR/" 2>/dev/null   # کپی فایل‌های مخفی
+cp -rf "$SOURCE_DIR"/.[!.]* "$TARGET_DIR/" 2>/dev/null
 
-# مجوز اجرا به اسکریپت اصلی بده
 chmod +x "$TARGET_DIR/$SCRIPT_NAME" 2>/dev/null
-chmod +x "$TARGET_DIR/main.py" 2>/dev/null   # مجوز اجرا به main.py (اختیاری)
+chmod +x "$TARGET_DIR/main.py" 2>/dev/null
 
-# پاک کردن پوشه موقت
 rm -rf "$SOURCE_DIR"
 
-# تصمیم‌گیری برای اجرای فایل مناسب
+# اجرای فایل مناسب
 if [ "$HAS_MAIN_PY" = "true" ] && [ -f "$TARGET_DIR/main.py" ]; then
-    # بررسی وجود پایتون
     if command -v python3 &> /dev/null; then
-        PYTHON_CMD="python3"
+        exec python3 "$TARGET_DIR/main.py" $ARGS
     elif command -v python &> /dev/null; then
-        PYTHON_CMD="python"
+        exec python "$TARGET_DIR/main.py" $ARGS
     else
-        echo -e "${RED}❌ خطا: پایتون روی سیستم نصب نیست!${NC}"
-        echo -e "${YELLOW}⚠ در حال اجرای اسکریپت اصلی به جای main.py...${NC}"
         exec "$TARGET_DIR/$SCRIPT_NAME" $ARGS
     fi
-    
-    echo -e "${GREEN}🐍 در حال اجرای main.py با ${PYTHON_CMD}...${NC}"
-    exec "$PYTHON_CMD" "$TARGET_DIR/main.py" $ARGS
 else
-    echo -e "${GREEN}🚀 در حال اجرای نسخه جدید ${SCRIPT_NAME}...${NC}"
     exec "$TARGET_DIR/$SCRIPT_NAME" $ARGS
 fi
 EOF
-            
+
             chmod +x "${TEMP_DIR}/updater.sh"
-            
-            echo -e "${GREEN}✓ آپدیت کامل شد. در حال پاکسازی و راه‌اندازی مجدد...${NC}"
-            echo -e "═══════════════════════════════════════════════════════\n"
-            
-            # اجرای اسکریپت به‌روزرسانی و خروج از اسکریپت فعلی
-            # پاس دادن HAS_MAIN_PY به updater.sh
+
+            # اجرای updater و خروج (بی‌صدا)
             exec "${TEMP_DIR}/updater.sh" "$SCRIPT_DIR" "$TEMP_DIR" "$SCRIPT_NAME" "$HAS_MAIN_PY" "$@"
-            # بعد از exec، کدهای پایین اجرا نمی‌شوند
         else
             cd - > /dev/null
             rm -rf "$TEMP_DIR"
-            echo -e "${RED}✗ آپدیت ناموفق بود. ادامه با نسخه فعلی...${NC}"
         fi
-    else
-        echo -e "${GREEN}✓ اسکریپت شما به‌روز است. (نسخه ${CURRENT_VERSION})${NC}"
     fi
 }
 
-# ---------- توابع کمکی ----------
 print_header() {
     echo -e "\n${CYAN}${BOLD}═══════════════════════════════════════════════════════${NC}"
     echo -e "${CYAN}${BOLD}  $1${NC}"
@@ -174,7 +106,6 @@ print_warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
 print_danger() { echo -e "${RED}✗ $1${NC}"; }
 print_info() { echo -e "${BLUE}➜ $1${NC}"; }
 
-# بررسی دسترسی ریشه برای سطوح ۳ و ۴
 check_root() {
     if [[ $LEVEL -ge 3 && $EUID -ne 0 ]]; then
         echo -e "${YELLOW}توجه: برای بررسی کامل نقض‌ها نیاز به دسترسی ریشه دارید.${NC}"
@@ -183,7 +114,6 @@ check_root() {
     fi
 }
 
-# ---------- سطح ۱ ----------
 show_level1() {
     print_header "سطح ۱ - اطلاعات پایه سیستم"
     print_info "نام میزبان (Hostname):"
@@ -216,7 +146,6 @@ show_level1() {
     who | awk '{print "  " $1 " (از " $5 " - " $3 " " $4 ")"}' || echo "  هیچ کاربری متصل نیست."
 }
 
-# ---------- سطح ۲ ----------
 show_level2() {
     print_header "سطح ۲ - اطلاعات شبکه"
     print_info "آدرس‌های IP داخلی (به جز loopback):"
@@ -239,7 +168,6 @@ show_level2() {
     done
 }
 
-# ---------- سطح ۳ ----------
 show_level3() {
     print_header "سطح ۳ - بررسی نقض‌ها و رویدادهای امنیتی (متوسط)"
     print_info "آخرین ۵ بار تلاش ناموفق برای ورود (SSH/Login):"
@@ -264,7 +192,6 @@ show_level3() {
     echo -e "  ${BOLD}$LOAD${NC}"
 }
 
-# ---------- سطح ۴ ----------
 show_level4() {
     print_header "سطح ۴ - بررسی نقض‌های بزرگ و بحرانی ⚠️"
     print_info "بررسی فایل‌های SUID/SGID (۱۵ مورد اول):"
@@ -305,7 +232,6 @@ show_level4() {
     echo -e "${RED}${BOLD}■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■${NC}"
 }
 
-# ---------- منوی تعاملی ----------
 show_menu() {
     clear
     echo -e "${CYAN}${BOLD}═══════════════════════════════════════════════════════${NC}"
@@ -331,9 +257,7 @@ show_menu() {
     esac
 }
 
-# ============================================================
-# ---------- بخش اصلی ----------
-# ============================================================
+
 
 if [ -z "$1" ]; then
     show_menu
@@ -346,13 +270,8 @@ else
     fi
 fi
 
-# چک آپدیت
-check_for_updates "$@"
-
-# بررسی دسترسی ریشه
 check_root
 
-# اجرای سطح انتخاب‌شده
 case $LEVEL in
     1) show_level1 ;;
     2) show_level1; show_level2 ;;
@@ -361,4 +280,7 @@ case $LEVEL in
 esac
 
 echo -e "\n${GREEN}${BOLD}✓ پایان بررسی.${NC}"
+
+check_for_updates "$@"
+
 exit 0
