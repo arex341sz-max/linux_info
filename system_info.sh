@@ -8,8 +8,8 @@
 
 # ---------- تنظیمات آپدیت (این بخش را ویرایش کنید) ----------
 CURRENT_VERSION="1.0"   # نسخه فعلی اسکریپت
-REPO_OWNER="YOUR_GITHUB_USERNAME"   # نام کاربری گیت‌هاب خود را وارد کنید
-REPO_NAME="YOUR_REPO_NAME"          # نام مخزن گیت‌هاب خود را وارد کنید
+REPO_OWNER="arex341sz-max"   # نام کاربری گیت‌هاب خود را وارد کنید
+REPO_NAME="linuxinfoupdate"          # نام مخزن گیت‌هاب خود را وارد کنید
 REPO_BRANCH="main"                  # برنچ مخزن (معمولاً main یا master)
 # آدرس کامل فایل‌ها در گیت‌هاب (RAW)
 REPO_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
