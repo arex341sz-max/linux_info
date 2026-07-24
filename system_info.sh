@@ -14,6 +14,9 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+# ======================================================
+# تابع بررسی به‌روزرسانی (با اجازه کاربر)
+# ======================================================
 check_for_updates() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -27,6 +30,16 @@ check_for_updates() {
     FILE_LIST=$(echo "$VERSION_FILE" | grep -A100 "^listf=" | sed -n '/^listf="/,/^"/p' | grep -v "^listf=" | grep -v '^"$' | sed 's/^[ \t]*//' | sed '/^[[:space:]]*$/d')
 
     if [ "$REMOTE_VERSION" != "$CURRENT_VERSION" ]; then
+        # ---- درخواست اجازه از کاربر ----
+        echo -e "\n${YELLOW}${BOLD}یک نسخه جدید (v${REMOTE_VERSION}) برای این اسکریپت موجود است.${NC}"
+        echo -e "${YELLOW}آیا مایل به به‌روزرسانی هستید؟ (${GREEN}y${NC}/${RED}n${NC})${NC} "
+        read -r answer
+        if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+            echo -e "${BLUE}به‌روزرسانی لغو شد.${NC}"
+            return 0
+        fi
+        # ---------------------------------
+
         HAS_MAIN_PY=false
         echo "$FILE_LIST" | grep -q "main.py" && HAS_MAIN_PY=true
 
@@ -91,10 +104,14 @@ EOF
         else
             cd - > /dev/null
             rm -rf "$TEMP_DIR"
+            echo -e "${RED}خطا در دانلود فایل‌های به‌روزرسانی.${NC}"
         fi
     fi
 }
 
+# ======================================================
+# توابع نمایش اطلاعات (بدون تغییر)
+# ======================================================
 print_header() {
     echo -e "\n${CYAN}${BOLD}═══════════════════════════════════════════════════════${NC}"
     echo -e "${CYAN}${BOLD}  $1${NC}"
@@ -257,7 +274,9 @@ show_menu() {
     esac
 }
 
-
+# ======================================================
+# بخش اصلی اسکریپت
+# ======================================================
 
 if [ -z "$1" ]; then
     show_menu
@@ -281,6 +300,7 @@ esac
 
 echo -e "\n${GREEN}${BOLD}✓ پایان بررسی.${NC}"
 
+# بررسی به‌روزرسانی (با اجازه کاربر)
 check_for_updates "$@"
 
 exit 0
