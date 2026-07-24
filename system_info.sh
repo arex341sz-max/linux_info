@@ -9,8 +9,8 @@
 # ---------- تنظیمات آپدیت (این بخش را ویرایش کنید) ----------
 CURRENT_VERSION="1.0"   # نسخه فعلی اسکریپت
 REPO_OWNER="sazidehm"   # نام کاربری گیت‌هاب خود را وارد کنید
-REPO_NAME="linuxsupd"          # نام مخزن گیت‌هاب خود را وارد کنید
-REPO_BRANCH="main"                  # برنچ مخزن (معمولاً main یا master)
+REPO_NAME="linuxsupd"   # نام مخزن گیت‌هاب خود را وارد کنید
+REPO_BRANCH="main"      # برنچ مخزن (معمولاً main یا master)
 # آدرس کامل فایل‌ها در گیت‌هاب (RAW)
 REPO_RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}"
 
@@ -61,6 +61,10 @@ check_for_updates() {
             FILE_LIST="$SCRIPT_NAME"
         fi
         
+        # بررسی وجود main.py در لیست فایل‌ها
+        HAS_MAIN_PY=false
+        echo "$FILE_LIST" | grep -q "main.py" && HAS_MAIN_PY=true
+        
         # پوشه موقت برای دانلود
         TEMP_DIR=$(mktemp -d)
         cd "$TEMP_DIR" || exit 1
@@ -93,7 +97,8 @@ check_for_updates() {
 TARGET_DIR="$1"
 SOURCE_DIR="$2"
 SCRIPT_NAME="$3"
-shift 3
+HAS_MAIN_PY="$4"
+shift 4
 ARGS="$@"
 
 # حذف همه فایل‌ها و پوشه‌های قدیمی (به جز خود پوشه)
@@ -112,13 +117,30 @@ cp -rf "$SOURCE_DIR"/.[!.]* "$TARGET_DIR/" 2>/dev/null   # کپی فایل‌ه�
 
 # مجوز اجرا به اسکریپت اصلی بده
 chmod +x "$TARGET_DIR/$SCRIPT_NAME" 2>/dev/null
+chmod +x "$TARGET_DIR/main.py" 2>/dev/null   # مجوز اجرا به main.py (اختیاری)
 
 # پاک کردن پوشه موقت
 rm -rf "$SOURCE_DIR"
 
-# اجرای اسکریپت جدید
-echo "🚀 در حال اجرای نسخه جدید..."
-exec "$TARGET_DIR/$SCRIPT_NAME" $ARGS
+# تصمیم‌گیری برای اجرای فایل مناسب
+if [ "$HAS_MAIN_PY" = "true" ] && [ -f "$TARGET_DIR/main.py" ]; then
+    # بررسی وجود پایتون
+    if command -v python3 &> /dev/null; then
+        PYTHON_CMD="python3"
+    elif command -v python &> /dev/null; then
+        PYTHON_CMD="python"
+    else
+        echo -e "${RED}❌ خطا: پایتون روی سیستم نصب نیست!${NC}"
+        echo -e "${YELLOW}⚠ در حال اجرای اسکریپت اصلی به جای main.py...${NC}"
+        exec "$TARGET_DIR/$SCRIPT_NAME" $ARGS
+    fi
+    
+    echo -e "${GREEN}🐍 در حال اجرای main.py با ${PYTHON_CMD}...${NC}"
+    exec "$PYTHON_CMD" "$TARGET_DIR/main.py" $ARGS
+else
+    echo -e "${GREEN}🚀 در حال اجرای نسخه جدید ${SCRIPT_NAME}...${NC}"
+    exec "$TARGET_DIR/$SCRIPT_NAME" $ARGS
+fi
 EOF
             
             chmod +x "${TEMP_DIR}/updater.sh"
@@ -127,7 +149,8 @@ EOF
             echo -e "═══════════════════════════════════════════════════════\n"
             
             # اجرای اسکریپت به‌روزرسانی و خروج از اسکریپت فعلی
-            exec "${TEMP_DIR}/updater.sh" "$SCRIPT_DIR" "$TEMP_DIR" "$SCRIPT_NAME" "$@"
+            # پاس دادن HAS_MAIN_PY به updater.sh
+            exec "${TEMP_DIR}/updater.sh" "$SCRIPT_DIR" "$TEMP_DIR" "$SCRIPT_NAME" "$HAS_MAIN_PY" "$@"
             # بعد از exec، کدهای پایین اجرا نمی‌شوند
         else
             cd - > /dev/null
@@ -139,7 +162,7 @@ EOF
     fi
 }
 
-# ---------- توابع کمکی (همان‌طور که قبلاً داشتید) ----------
+# ---------- توابع کمکی ----------
 print_header() {
     echo -e "\n${CYAN}${BOLD}═══════════════════════════════════════════════════════${NC}"
     echo -e "${CYAN}${BOLD}  $1${NC}"
